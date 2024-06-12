@@ -1,0 +1,127 @@
+name: sait_thoth
+
+volumes:
+  redis_cache:
+
+networks:
+  saitnet:
+    driver: bridge
+
+services:
+  if-st-redis:
+    image: redis:7.0.11-alpine
+    restart: unless-stopped
+    container_name: cf-st-redis
+    networks:
+      - saitnet
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis_cache:/data
+    profiles: [ "dev", "prod" ]
+
+  if-st-php-82:
+    build:
+      args:
+        user: ${SYSUSER:-ubuntu}
+        uid: 1000
+      context: ./containers/php
+      dockerfile: 8.2/Dockerfile
+    image: if-st-php-82
+    container_name: cf-st-php-82
+    restart: always
+    working_dir: /var/www/
+    env_file:
+      - ./.env
+    volumes:
+      - ./containers/php/mount:/mount/:Z,ro
+      - ./apps/.:/var/www/:rw
+    networks:
+      - saitnet
+    profiles: [ "dev", "prod" ]
+
+  if-st-php-81:
+    build:
+      args:
+        user: ${SYSUSER:-ubuntu}
+        uid: 1000
+      context: ./containers/php
+      dockerfile: 8.1/Dockerfile
+    image: if-st-php-81
+    container_name: cf-st-php-81
+    restart: always
+    working_dir: /var/www/
+    env_file:
+      - ./.env
+    volumes:
+      - ./containers/php/mount:/mount/:Z,ro
+      - ./apps/.:/var/www/:rw
+    networks:
+      - saitnet
+    profiles: [ "na" ]
+
+  if-st-php-74:
+    build:
+      args:
+        user: ${SYSUSER:-ubuntu}
+        uid: 1000
+      context: ./containers/php
+      dockerfile: 7.4/Dockerfile
+    image: if-st-php-74
+    container_name: cf-st-php-74
+    restart: always
+    working_dir: /var/www/
+    env_file:
+      - ./.env
+    volumes:
+      - ./containers/php/mount:/mount/:Z,ro
+      - ./apps/.:/var/www/:rw
+    networks:
+      - saitnet
+    profiles: [ "dev", "prod" ]
+
+  if-st-mysql:
+    image: mysql:8
+    restart: always
+    container_name: cf-st-mysql
+    networks:
+      - saitnet
+    working_dir: /queries
+    volumes:
+      - ./.st/mysql:/var/lib/mysql/:z,rw
+      - ./.st/mysql-queries:/queries:z,rw
+      - ./containers/mysql/config.cnf:/etc/config.cnf
+      - ./containers/mysql/copy.sh:/etc/copy.sh
+    env_file:
+      - ./.env
+    profiles: ["dev", "prod" ]
+
+  if-st-phpmyadmin:
+   image: phpmyadmin
+   container_name: cf-st-phpmyadmin
+   restart: unless-stopped
+   env_file:
+    - ./.env
+   ports:
+    - ${PHPMYADMIN_PORT}:80
+   networks:
+    - saitnet
+   profiles: ["dev"]
+
+  if-st-nginx:
+    build:
+      context: ./containers/nginx
+      dockerfile: web.Dockerfile
+    image: if-st-nginx
+    restart: always
+    container_name: cf-st-nginx
+    networks:
+      - saitnet
+    ports:
+      - ${FROXLOR_PORT}:80
+      - ${ROUNDCUBE_PORT}:8080
+      - ${APP1_PORT}:8081
+    volumes:
+      - ./containers/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./containers/nginx/sites-enabled:/etc/nginx/sites-enabled:rw
+      - ./apps/.:/var/www/:rw
+    profiles: [ "dev", "prod" ]
